@@ -74,7 +74,7 @@ def main():
                     cur.execute("VACUUM ANALYZE core.keyword")
                     cur.execute("VACUUM ANALYZE core.language")
                     cur.execute("VACUUM ANALYZE core.languagevariety")
-                    cur.execute("VACUUM ANALYZE core.mainmetadata")
+                    cur.execute("VACUUM ANALYZE core.metadata")
                     cur.execute("VACUUM ANALYZE core.person")
                     cur.execute("VACUUM ANALYZE core.source")
                     cur.execute("VACUUM ANALYZE core.source_creator")
@@ -90,6 +90,7 @@ def main():
                     cur.execute("VACUUM ANALYZE core.textfile")
                     cur.execute("VACUUM ANALYZE core.titleinformation")
                     cur.execute("VACUUM ANALYZE core.topic")
+                    cur.execute("VACUUM ANALYZE factory.filemetadata")
                 conn.autocommit = False
 
             chunk += 1
