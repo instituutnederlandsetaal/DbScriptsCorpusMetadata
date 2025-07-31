@@ -1,25 +1,37 @@
 import logging
-import os
+import sys
 import psycopg2
 
-# Configure logging
-logging.basicConfig(
-    format="%(asctime)s %(levelname)s %(message)s",
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
-
+# ─── CONFIGURATION ─────────────────────────────────────────────
 DB_CONFIG = {
     "host":     "HOST.NAME",
     "port":     5432,
-    "dbname":   "DATABSE",
+    "dbname":   "DATABASE",
     "user":     "USER",
     "password": "SECRET"
 }
 
-# Batch and vacuum settings
-BATCH_SIZE = int(os.getenv("BATCH_SIZE", 10))
-CHUNKS_PER_VAC = int(os.getenv("CHUNKS_PER_VAC", 10))
+
+BATCH_SIZE              = 100                           # rows per chunk
+CHUNKS_PER_VAC          = 100                           # vacuum every N chunks
+SLEEP_BETWEEN_CHUNKS    = 0                             # seconds (set to positive int if you want to throttle)
+
+LOG_FILENAME            = "process_filemetadata.log"    # the log file
+
+# log handler
+logger = logging.getLogger("batch_processor")
+logger.setLevel(logging.INFO)
+fmt = logging.Formatter("[%(asctime)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+
+# console handler
+ch = logging.StreamHandler(sys.stdout)
+ch.setFormatter(fmt)
+logger.addHandler(ch)
+
+# file handler
+fh = logging.FileHandler(LOG_FILENAME)
+fh.setFormatter(fmt)
+logger.addHandler(fh)
 
 def main():
     # Connect to the target database
