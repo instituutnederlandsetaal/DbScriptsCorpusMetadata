@@ -6,11 +6,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ─── CONFIGURATION ─────────────────────────────────────────────
 DB_CONFIG = {
-    "host":     "svatdu10.ivdnt.loc",
+    "host":     "HOST.NAME",
     "port":     5432,
-    "dbname":   "metadata",
-    "user":     "duct",
-    "password": "MqngL858NZ"
+    "dbname":   "DATABASE",
+    "user":     "USER",
+    "password": "SECRET"
 }
 
 SHARDS                  = 8           # number of parallel shards/sessions
