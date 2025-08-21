@@ -38,7 +38,7 @@ SET_PARALLEL_PER_GATHER = 4           # Parallelism within a single query plan n
 
 RUN_VACUUM_ANALYZE_END  = True        # Light maintenance at the end to keep stats fresh.
 
-LOG_FILENAME            = "refresh_profile_digest_parallel.log"
+LOG_FILENAME            = "refresh_change_digest_parallel.log"
 
 # ─── LOGGING ──────────────────────────────────────────────────────────────────
 logger = logging.getLogger("digest_refresher")
@@ -76,7 +76,7 @@ def run_shard(shard_index: int, run_started_at):
     SQL_BATCH = """
     WITH run AS (
       SELECT *
-      FROM profiler.refresh_metadata_profile_digest_batch_shard(
+      FROM profiler.refresh_metadata_change_digest_batch_shard(
         p_only_ids          => NULL,              -- process the shard’s next candidates globally
         p_batch_size        => %(batch_size)s,    -- number of rows for this batch
         p_use_md5           => %(use_md5)s,       -- MD5 vs SHA-256
@@ -209,12 +209,12 @@ def main():
     # Optional post-run maintenance: this keeps planner stats current and
     # tidies up dead tuples in the digest table. Cheap and helpful after big upserts.
     if RUN_VACUUM_ANALYZE_END:
-        logger.info("*** VACUUM ANALYZE profiler.metadata_profile_digest ***")
+        logger.info("*** VACUUM ANALYZE profiler.metadata_change_digest ***")
         try:
             conn = psycopg2.connect(**DB_CONFIG)
             conn.autocommit = True
             with conn.cursor() as cur:
-                cur.execute("VACUUM ANALYZE profiler.metadata_profile_digest;")
+                cur.execute("VACUUM ANALYZE profiler.metadata_change_digest;")
             conn.close()
         except Exception as e:
             logger.exception(f"VACUUM failed: {e}")

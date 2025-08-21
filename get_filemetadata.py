@@ -11,7 +11,6 @@ DB_CONFIG = {
     "password": "SECRET"
 }
 
-
 BATCH_SIZE              = 100                           # rows per chunk
 CHUNKS_PER_VAC          = 100                           # vacuum every N chunks
 SLEEP_BETWEEN_CHUNKS    = 0                             # seconds (set to positive int if you want to throttle)
@@ -45,12 +44,12 @@ def main():
             with conn:
                 with conn.cursor() as cur:
                     # Tune per‐chunk memory
-                    cur.execute("SET work_mem = '64MB';")
-                    cur.execute("SET maintenance_work_mem = '256MB';")
+                    cur.execute("SET work_mem = '4GB';")
+                    cur.execute("SET maintenance_work_mem = '2GB';")
 
                     # Call the batch loader function
                     cur.execute(
-                        "SELECT factory.get_filemetadata_batch(%s, %s);",
+                        "SELECT factory.get_filemetadata_batch_from_audit(%s, %s);",
                         (last_id, BATCH_SIZE),
                     )
                     new_last_id = cur.fetchone()[0]
@@ -66,10 +65,10 @@ def main():
 
             # Periodic VACUUM ANALYZE on the target table
             if chunk % CHUNKS_PER_VAC == 0:
-                logger.info("Running VACUUM ANALYZE on factory.filemetadata")
+                logger.info("Running VACUUM ANALYZE on factory.filemetadata_audited")
                 conn.autocommit = True
                 with conn.cursor() as cur:
-                    cur.execute("VACUUM ANALYZE factory.filemetadata;")
+                    cur.execute("VACUUM ANALYZE factory.filemetadata_audited;")
                 conn.autocommit = False
 
             chunk += 1

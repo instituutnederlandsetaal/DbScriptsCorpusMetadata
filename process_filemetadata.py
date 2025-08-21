@@ -48,8 +48,8 @@ def main():
             with conn:
                 with conn.cursor() as cur:
                     logger.info(f"Chunk #{chunk}: processing up to {BATCH_SIZE} rows…")
-                    cur.execute("SET work_mem = '64MB'")
-                    cur.execute("SET maintenance_work_mem = '256MB'")
+                    cur.execute("SET work_mem = '4GB'")
+                    cur.execute("SET maintenance_work_mem = '2GB'")
                     cur.execute(
                         "SELECT factory.process_filemetadata_chunk(%s)",
                         (BATCH_SIZE,)
@@ -90,7 +90,13 @@ def main():
                     cur.execute("VACUUM ANALYZE core.textfile")
                     cur.execute("VACUUM ANALYZE core.titleinformation")
                     cur.execute("VACUUM ANALYZE core.topic")
-                    cur.execute("VACUUM ANALYZE factory.filemetadata")
+                    # cur.execute("VACUUM ANALYZE factory.filemetadata")
+                    # cur.execute("VACUUM ANALYZE interface.source_interface")
+                    # cur.execute("VACUUM ANALYZE interface.person_interface")
+                    # cur.execute("VACUUM ANALYZE interface.metadata_interface")
+                    # cur.execute("VACUUM ANALYZE interface.textfile_interface")
+                    # cur.execute("VACUUM ANALYZE interface.textcategorisation_interface")
+                    # cur.execute("VACUUM ANALYZE interface.ipr_interface")
                 conn.autocommit = False
 
             chunk += 1
