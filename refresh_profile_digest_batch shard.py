@@ -3,15 +3,7 @@ import logging
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
-# ─── CONFIGURATION ─────────────────────────────────────────────
-DB_CONFIG = {
-    "host":     "HOST.NAME",
-    "port":     5432,
-    "dbname":   "DATABASE",
-    "user":     "USER",
-    "password": "SECRET"
-}
+from database_config import DB_CONFIG
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Runtime knobs. These control *how* work is split and how aggressively each

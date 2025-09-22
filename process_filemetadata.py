@@ -2,18 +2,10 @@ import psycopg2
 import logging
 import sys
 import time
-
-# ─── CONFIGURATION ─────────────────────────────────────────────
-DB_CONFIG = {
-    "host":     "HOST.NAME",
-    "port":     5432,
-    "dbname":   "DATABASE",
-    "user":     "USER",
-    "password": "SECRET"
-}
+from database_config import DB_CONFIG
 
 BATCH_SIZE              = 100                           # rows per chunk
-CHUNKS_PER_VAC          = 100                           # vacuum every N chunks
+CHUNKS_PER_VAC          = 1000                          # vacuum every N chunks
 SLEEP_BETWEEN_CHUNKS    = 0                             # seconds (set to positive int if you want to throttle)
 
 LOG_FILENAME            = "process_filemetadata.log"    # the log file
@@ -48,8 +40,9 @@ def main():
             with conn:
                 with conn.cursor() as cur:
                     logger.info(f"Chunk #{chunk}: processing up to {BATCH_SIZE} rows…")
+                    cur.execute("SET synchronous_commit = off")
                     cur.execute("SET work_mem = '4GB'")
-                    cur.execute("SET maintenance_work_mem = '2GB'")
+                    cur.execute("SET maintenance_work_mem = '1GB'")
                     cur.execute(
                         "SELECT factory.process_filemetadata_chunk(%s)",
                         (BATCH_SIZE,)
@@ -90,13 +83,7 @@ def main():
                     cur.execute("VACUUM ANALYZE core.textfile")
                     cur.execute("VACUUM ANALYZE core.titleinformation")
                     cur.execute("VACUUM ANALYZE core.topic")
-                    # cur.execute("VACUUM ANALYZE factory.filemetadata")
-                    # cur.execute("VACUUM ANALYZE interface.source_interface")
-                    # cur.execute("VACUUM ANALYZE interface.person_interface")
-                    # cur.execute("VACUUM ANALYZE interface.metadata_interface")
-                    # cur.execute("VACUUM ANALYZE interface.textfile_interface")
-                    # cur.execute("VACUUM ANALYZE interface.textcategorisation_interface")
-                    # cur.execute("VACUUM ANALYZE interface.ipr_interface")
+                    cur.execute("VACUUM ANALYZE factory.filemetadata_audited")
                 conn.autocommit = False
 
             chunk += 1

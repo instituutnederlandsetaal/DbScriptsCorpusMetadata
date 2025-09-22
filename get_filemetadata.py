@@ -1,15 +1,7 @@
 import logging
 import sys
 import psycopg2
-
-# ─── CONFIGURATION ─────────────────────────────────────────────
-DB_CONFIG = {
-    "host":     "HOST.NAME",
-    "port":     5432,
-    "dbname":   "DATABASE",
-    "user":     "USER",
-    "password": "SECRET"
-}
+from database_config import DB_CONFIG
 
 BATCH_SIZE              = 100                           # rows per chunk
 CHUNKS_PER_VAC          = 100                           # vacuum every N chunks
