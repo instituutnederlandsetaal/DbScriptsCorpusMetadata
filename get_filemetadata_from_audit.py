@@ -7,7 +7,7 @@ BATCH_SIZE              = 100                           # rows per chunk
 CHUNKS_PER_VAC          = 100                           # vacuum every N chunks
 SLEEP_BETWEEN_CHUNKS    = 0                             # seconds (set to positive int if you want to throttle)
 
-LOG_FILENAME            = "process_filemetadata.log"    # the log file
+LOG_FILENAME            = "get_filemetadata_from_audit.log"    # the log file
 
 # log handler
 logger = logging.getLogger("batch_processor")
@@ -57,10 +57,10 @@ def main():
 
             # Periodic VACUUM ANALYZE on the target table
             if chunk % CHUNKS_PER_VAC == 0:
-                logger.info("Running VACUUM ANALYZE on factory.filemetadata_audited")
+                logger.info("Running VACUUM ANALYZE on factory.filemetadata_audited_prd")
                 conn.autocommit = True
                 with conn.cursor() as cur:
-                    cur.execute("VACUUM ANALYZE factory.filemetadata_audited;")
+                    cur.execute("VACUUM ANALYZE factory.filemetadata_audited_prd;")
                 conn.autocommit = False
 
             chunk += 1

@@ -3,11 +3,11 @@ import sys
 import psycopg2
 from database_config import DB_CONFIG
 
-BATCH_SIZE              = 100                           # rows per chunk
-CHUNKS_PER_VAC          = 100                           # vacuum every N chunks
-SLEEP_BETWEEN_CHUNKS    = 0                             # seconds (set to positive int if you want to throttle)
+BATCH_SIZE              = 1000  # rows per chunk
+CHUNKS_PER_VAC          = 1000  # vacuum every N chunks
+SLEEP_BETWEEN_CHUNKS    = 0     # seconds (set to positive int if you want to throttle)
 
-LOG_FILENAME            = "process_filemetadata_conversion_audit.log"    # the log file
+LOG_FILENAME            = "get_filemetadata_to_audit_all.log"    # the log file
 
 # log handler
 logger = logging.getLogger("batch_processor")
@@ -41,7 +41,7 @@ def main():
 
                     # Call the batch loader function
                     cur.execute(
-                        "SELECT factory.get_filemetadata_batch_to_audit(%s, %s);",
+                        "SELECT factory.get_filemetadata_batch_to_audit_all(%s, %s);",
                         (last_id, BATCH_SIZE),
                     )
                     new_last_id = cur.fetchone()[0]
