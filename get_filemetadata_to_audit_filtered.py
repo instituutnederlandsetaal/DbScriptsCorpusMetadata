@@ -57,10 +57,10 @@ def main():
 
             # Periodic VACUUM ANALYZE on the target table
             if chunk % CHUNKS_PER_VAC == 0:
-                logger.info("Running VACUUM ANALYZE on factory.filemetadata_conversion_audit")
+                logger.info("Running VACUUM ANALYZE on factory.filemetadata_conversion_audit_prd")
                 conn.autocommit = True
                 with conn.cursor() as cur:
-                    cur.execute("VACUUM ANALYZE factory.filemetadata_conversion_audit;")
+                    cur.execute("VACUUM ANALYZE factory.filemetadata_conversion_audit_prd;")
                 conn.autocommit = False
 
             chunk += 1

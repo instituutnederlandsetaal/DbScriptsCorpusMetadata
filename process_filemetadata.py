@@ -42,7 +42,7 @@ def main():
                     logger.info(f"Chunk #{chunk}: processing up to {BATCH_SIZE} rows…")
                     cur.execute("SET synchronous_commit = off")
                     cur.execute("SET work_mem = '4GB'")
-                    cur.execute("SET maintenance_work_mem = '1GB'")
+                    cur.execute("SET maintenance_work_mem = '2GB'")
                     cur.execute(
                         "SELECT factory.process_filemetadata_chunk(%s)",
                         (BATCH_SIZE,)
@@ -83,7 +83,7 @@ def main():
                     cur.execute("VACUUM ANALYZE core.textfile")
                     cur.execute("VACUUM ANALYZE core.titleinformation")
                     cur.execute("VACUUM ANALYZE core.topic")
-                    cur.execute("VACUUM ANALYZE factory.filemetadata_audited")
+                    cur.execute("VACUUM ANALYZE factory.filemetadata_audited_prd")
                 conn.autocommit = False
 
             chunk += 1
