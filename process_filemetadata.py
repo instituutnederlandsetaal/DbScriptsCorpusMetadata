@@ -83,7 +83,6 @@ def main():
                     cur.execute("VACUUM ANALYZE core.textfile")
                     cur.execute("VACUUM ANALYZE core.titleinformation")
                     cur.execute("VACUUM ANALYZE core.topic")
-                    cur.execute("VACUUM ANALYZE factory.filemetadata_audited_prd")
                 conn.autocommit = False
 
             chunk += 1
@@ -93,6 +92,8 @@ def main():
     except Exception as e:
         logger.exception(f"Error during processing: {e}")
     finally:
+        with conn.cursor() as cur:
+            cur.execute("SELECT core.sync_interface_with_core();")
         conn.close()
         logger.info("=== Run finished ===")
 
