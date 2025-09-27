@@ -92,8 +92,6 @@ def main():
     except Exception as e:
         logger.exception(f"Error during processing: {e}")
     finally:
-        with conn.cursor() as cur:
-            cur.execute("SELECT core.sync_interface_with_core();")
         conn.close()
         logger.info("=== Run finished ===")
 
