@@ -5,12 +5,13 @@ import time
 from psycopg2 import errors
 from database_config import DB_CONFIG
 
-BATCH_SIZE              = 100            # rows per chunk
+BATCH_SIZE              = 100           # rows per chunk
 CHUNKS_PER_VAC          = 100           # vacuum every N chunks
 SLEEP_BETWEEN_CHUNKS    = 0             # seconds (set to positive int if you want to throttle)
 LOOKBACK_INTERVAL       = "7 days"      # the lookback interval param for the function
 
-LOG_FILENAME            = "get_filemetadata_from_audit.log"    # the log file
+# log file
+LOG_FILENAME            = "get_filemetadata_from_audit.log"
 
 # log handler
 logger = logging.getLogger("batch_processor")
