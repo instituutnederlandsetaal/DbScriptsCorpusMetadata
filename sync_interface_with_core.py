@@ -1,8 +1,6 @@
 import logging
 import sys
-
 import psycopg2
-
 from database_config import DB_CONFIG
 
 # log file
