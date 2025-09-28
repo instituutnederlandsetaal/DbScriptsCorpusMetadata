@@ -1,17 +1,19 @@
 import logging
 import sys
-import psycopg2
 import time
+
+import psycopg2
 from psycopg2 import errors
+
 from database_config import DB_CONFIG
 
-BATCH_SIZE              = 100           # rows per chunk
-CHUNKS_PER_VAC          = 100           # vacuum every N chunks
-SLEEP_BETWEEN_CHUNKS    = 0             # seconds (set to positive int if you want to throttle)
-LOOKBACK_INTERVAL       = "7 days"      # the lookback interval param for the function
+BATCH_SIZE = 100  # rows per chunk
+CHUNKS_PER_VAC = 100  # vacuum every N chunks
+SLEEP_BETWEEN_CHUNKS = 0  # seconds (set to positive int if you want to throttle)
+LOOKBACK_INTERVAL = "7 days"  # the lookback interval param for the function
 
 # log file
-LOG_FILENAME            = "get_filemetadata_from_audit.log"
+LOG_FILENAME = "get_filemetadata_from_audit.log"
 
 # log handler
 logger = logging.getLogger("batch_processor")
@@ -28,6 +30,7 @@ fh = logging.FileHandler(LOG_FILENAME)
 fh.setFormatter(fmt)
 logger.addHandler(fh)
 
+
 def main():
     conn = psycopg2.connect(**DB_CONFIG)
     # guards: stop after N chunks or T minutes even if DB never says "done"
@@ -35,7 +38,7 @@ def main():
     MAX_RUNTIME = 60 * 10
 
     start_ts = time.time()
-    last_mtime = None   # keyset cursor (None means first page)
+    last_mtime = None  # keyset cursor (None means first page)
     last_id = None
     chunk = 1
 
@@ -113,6 +116,7 @@ def main():
     finally:
         conn.close()
         logger.info("Connection closed.")
+
 
 if __name__ == "__main__":
     main()

@@ -1,8 +1,10 @@
-import psycopg2
 import logging
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+import psycopg2
+
 from database_config import DB_CONFIG
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -10,35 +12,39 @@ from database_config import DB_CONFIG
 # shard session pushes work into Postgres. Tuning them is the fastest way to
 # trade latency vs. load.
 # ──────────────────────────────────────────────────────────────────────────────
-SHARDS                  = 8           # Number of parallel worker threads/sessions.
-                                      # Each thread opens its own DB connection and processes
-                                      # its shard (pkid % SHARDS == shard_index) in batches.
+SHARDS = 8  # Number of parallel worker threads/sessions.
+# Each thread opens its own DB connection and processes
+# its shard (pkid % SHARDS == shard_index) in batches.
 
-BATCH_SIZE              = 10000       # Rows per batch per shard. Larger = fewer round trips,
-                                      # but bigger transactions/WAL bursts and more memory/live locks.
+BATCH_SIZE = 10000  # Rows per batch per shard. Larger = fewer round trips,
+# but bigger transactions/WAL bursts and more memory/live locks.
 
-USE_MD5                 = True        # Use MD5 instead of SHA-256 for the digest. Much faster.
+USE_MD5 = True  # Use MD5 instead of SHA-256 for the digest. Much faster.
 
-COLLAPSE_WHITESPACE     = True        # Normalize XML string by collapsing whitespace before hashing.
+COLLAPSE_WHITESPACE = True  # Normalize XML string by collapsing whitespace before hashing.
 
-SLEEP_BETWEEN_BATCHES   = 0.0         # Optional pause between batches per shard. Useful to smooth load.
+SLEEP_BETWEEN_BATCHES = 0.0  # Optional pause between batches per shard. Useful to smooth load.
 
-SET_WORK_MEM            = "1GB"       # Per-session work_mem (applies to sorts/hash ops in that session).
+SET_WORK_MEM = "1GB"  # Per-session work_mem (applies to sorts/hash ops in that session).
 
-SET_PARALLEL_PER_GATHER = 4           # Parallelism within a single query plan node. Sharding already
-                                      # gives us parallelism; this rarely helps a lot. None to skip.
+SET_PARALLEL_PER_GATHER = 4  # Parallelism within a single query plan node. Sharding already
+# gives us parallelism; this rarely helps a lot. None to skip.
 
-RUN_VACUUM_ANALYZE_END  = True        # Light maintenance at the end to keep stats fresh.
+RUN_VACUUM_ANALYZE_END = True  # Light maintenance at the end to keep stats fresh.
 
-LOG_FILENAME            = "refresh_change_digest_parallel.log"
+LOG_FILENAME = "refresh_change_digest_parallel.log"
 
 # ─── LOGGING ──────────────────────────────────────────────────────────────────
 logger = logging.getLogger("digest_refresher")
 logger.setLevel(logging.INFO)
 fmt = logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s",
                         datefmt="%Y-%m-%d %H:%M:%S")
-sh = logging.StreamHandler(sys.stdout); sh.setFormatter(fmt); logger.addHandler(sh)
-fh = logging.FileHandler(LOG_FILENAME); fh.setFormatter(fmt); logger.addHandler(fh)
+sh = logging.StreamHandler(sys.stdout);
+sh.setFormatter(fmt);
+logger.addHandler(sh)
+fh = logging.FileHandler(LOG_FILENAME);
+fh.setFormatter(fmt);
+logger.addHandler(fh)
 
 
 def run_shard(shard_index: int, run_started_at):
@@ -59,7 +65,7 @@ def run_shard(shard_index: int, run_started_at):
     """
     t0 = time.time()
     processed_total = 0
-    changed_total   = 0
+    changed_total = 0
 
     # The SQL does exactly one “batch” for this shard:
     #   - Calls the server function with batch size, sharding params, and run_started_at.
@@ -115,12 +121,12 @@ def run_shard(shard_index: int, run_started_at):
 
                     # Do one batch for this shard and read aggregated counts.
                     cur.execute(SQL_BATCH, {
-                        "batch_size":       BATCH_SIZE,
-                        "use_md5":          USE_MD5,
-                        "collapse_ws":      COLLAPSE_WHITESPACE,
-                        "shard_index":      shard_index,
-                        "shard_count":      SHARDS,
-                        "run_started_at":   run_started_at
+                        "batch_size": BATCH_SIZE,
+                        "use_md5": USE_MD5,
+                        "collapse_ws": COLLAPSE_WHITESPACE,
+                        "shard_index": shard_index,
+                        "shard_count": SHARDS,
+                        "run_started_at": run_started_at
                     })
                     row = cur.fetchone()
                     if row is None:
@@ -132,7 +138,7 @@ def run_shard(shard_index: int, run_started_at):
 
             # Accumulate totals per shard for final summary
             processed_total += processed
-            changed_total   += changed
+            changed_total += changed
 
             logger.info(
                 f"[shard {shard_index}] batch {batch_no}: "
@@ -172,7 +178,7 @@ def main():
     logger.info(f"Run timestamp (p_run_started_at) = {run_started_at.isoformat()}")
 
     totals_processed = 0
-    totals_changed   = 0
+    totals_changed = 0
 
     # Create a thread pool: one future per shard. Each shard processes its modulus slice
     # (pkid % SHARDS == shard_index) in independent batches until it returns processed=0.
@@ -183,7 +189,7 @@ def main():
             try:
                 processed, changed, secs = fut.result()
                 totals_processed += processed
-                totals_changed   += changed
+                totals_changed += changed
                 logger.info(
                     f"[shard {shard}] DONE: processed={processed:,}, "
                     f"changed={changed:,} in {secs:,.1f}s"

@@ -1,14 +1,16 @@
-import psycopg2
 import logging
 import sys
 import time
+
+import psycopg2
+
 from database_config import DB_CONFIG
 
-BATCH_SIZE              = 100                           # rows per chunk
-CHUNKS_PER_VAC          = 1000                          # vacuum every N chunks
-SLEEP_BETWEEN_CHUNKS    = 0                             # seconds (set to positive int if you want to throttle)
+BATCH_SIZE = 100  # rows per chunk
+CHUNKS_PER_VAC = 1000  # vacuum every N chunks
+SLEEP_BETWEEN_CHUNKS = 0  # seconds (set to positive int if you want to throttle)
 
-LOG_FILENAME            = "process_filemetadata.log"    # the log file
+LOG_FILENAME = "process_filemetadata.log"  # the log file
 
 # log handler
 logger = logging.getLogger("batch_processor")
@@ -24,6 +26,7 @@ logger.addHandler(ch)
 fh = logging.FileHandler(LOG_FILENAME)
 fh.setFormatter(fmt)
 logger.addHandler(fh)
+
 
 def main():
     logger.info("=== Run started ===")
@@ -94,6 +97,7 @@ def main():
     finally:
         conn.close()
         logger.info("=== Run finished ===")
+
 
 if __name__ == "__main__":
     main()
