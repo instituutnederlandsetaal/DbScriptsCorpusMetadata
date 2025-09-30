@@ -39,11 +39,11 @@ logger = logging.getLogger("digest_refresher")
 logger.setLevel(logging.INFO)
 fmt = logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s",
                         datefmt="%Y-%m-%d %H:%M:%S")
-sh = logging.StreamHandler(sys.stdout);
-sh.setFormatter(fmt);
+sh = logging.StreamHandler(sys.stdout)
+sh.setFormatter(fmt)
 logger.addHandler(sh)
-fh = logging.FileHandler(LOG_FILENAME);
-fh.setFormatter(fmt);
+fh = logging.FileHandler(LOG_FILENAME)
+fh.setFormatter(fmt)
 logger.addHandler(fh)
 
 
