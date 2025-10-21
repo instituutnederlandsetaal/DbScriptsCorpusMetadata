@@ -38,6 +38,24 @@ def main():
                 cur.execute("SET maintenance_work_mem = '2GB'")
                 cur.execute("SELECT core.sync_interface_with_core()")
 
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            cur.execute("VACUUM ANALYZE interface.creator_interface;")
+            cur.execute("VACUUM ANALYZE interface.creator_person_interface;")
+            cur.execute("VACUUM ANALYZE interface.ipr_interface;")
+            cur.execute("VACUUM ANALYZE interface.language_masterdata_interface;")
+            cur.execute("VACUUM ANALYZE interface.languagevariety_interface;")
+            cur.execute("VACUUM ANALYZE interface.languagevariety_masterdata_interface;")
+            cur.execute("VACUUM ANALYZE interface.metadata_interface;")
+            cur.execute("VACUUM ANALYZE interface.person_interface;")
+            cur.execute("VACUUM ANALYZE interface.source_creator_interface;")
+            cur.execute("VACUUM ANALYZE interface.source_interface;")
+            cur.execute("VACUUM ANALYZE interface.textcategorisation_interface;")
+            cur.execute("VACUUM ANALYZE interface.textcategorisation_languagevariety_interface;")
+            cur.execute("VACUUM ANALYZE interface.textfile_interface;")
+            cur.execute("VACUUM ANALYZE interface.titleinformation_interface;")
+        conn.autocommit = False
+
     except Exception as e:
         logger.exception(f"Error during processing: {e}")
     finally:
