@@ -4,3 +4,4 @@
 *.pyc
 *.log
 database_config.py
+/pg_schema_export/
