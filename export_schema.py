@@ -25,7 +25,14 @@ from typing import Dict, List, Set, Optional
 import psycopg2
 from psycopg2 import sql
 
-# ---------- Logging ----------
+# --- Auto-commit settings ---
+from git_config import GIT_CONFIG
+AUTO_INIT_GIT = GIT_CONFIG["AUTO_INIT_GIT"]
+AUTO_GIT_USER_NAME = GIT_CONFIG["AUTO_GIT_USER_NAME"]
+AUTO_GIT_USER_EMAIL = GIT_CONFIG["AUTO_GIT_USER_EMAIL"]
+AUTO_GIT_COMMIT_MESSAGE = GIT_CONFIG["AUTO_GIT_COMMIT_MESSAGE"]
+
+# --- Logging ---
 LOG_FILENAME = "export_schema.log"  # change this filename if you want
 
 logger = logging.getLogger("pg_schema_export")
