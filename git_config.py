@@ -1,7 +1,6 @@
-DB_CONFIG = {
-    "host": "svatdu10.ivdnt.loc",
-    "port": 5432,
-    "dbname": "metadata",
-    "user": "postgres",
-    "password": "duct-ato-db-pw"
+GIT_CONFIG = {
+    "AUTO_INIT_GIT": True,
+    "AUTO_GIT_USER_NAME": "Jeroen Willemsen",
+    "AUTO_GIT_USER_EMAIL": "jeroen.willemsen@ivdnt.org",
+    "AUTO_GIT_COMMIT_MESSAGE": "Schema export: automatic commit"
 }
