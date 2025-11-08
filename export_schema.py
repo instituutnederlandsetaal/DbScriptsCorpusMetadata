@@ -446,17 +446,95 @@ def generate_makefile(outdir: Path):
     logger.info("Wrote Makefile: %s", mf.relative_to(Path.cwd()))
 
 
-def init_git(outdir: Path):
+def init_git(
+        outdir: Path,
+        user_name: Optional[str] = None,
+        user_email: Optional[str] = None,
+        commit: bool = True,
+        commit_message: str = "Initial schema export"
+):
+    """
+    Initialise a git repository in outdir (if not already a repo), optionally set user.name/user.email,
+    write a sensible .gitignore, run git add and git commit.
+
+    Returns True if repository was created/committed successfully, False otherwise.
+    """
     try:
-        subprocess.run(["git", "init", str(outdir)], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        gi = outdir / ".gitignore"
-        gi.write_text("__pycache__/\n*.pyc\npg_dump_errors/\n", encoding="utf-8", errors="replace")
-        logger.info("Initialized git repo in %s", outdir)
+        # If already a git repo, skip init
+        if (outdir / ".git").exists():
+            logger.info("Directory already a git repository: %s", outdir)
+        else:
+            subprocess.run(["git", "init", str(outdir)], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            logger.info("Initialised git repository in %s", outdir)
+
+        # local repo git config (only set if values provided)
+        if user_name:
+            subprocess.run(["git", "-C", str(outdir), "config", "user.name", user_name], check=True)
+            logger.info("Set git user.name = %s", user_name)
+        if user_email:
+            subprocess.run(["git", "-C", str(outdir), "config", "user.email", user_email], check=True)
+            logger.info("Set git user.email = %s", user_email)
+
+        # Write .gitignore (append if exists)
+        gitignore = outdir / ".gitignore"
+        default_ignore = [
+            "__pycache__/",
+            "*.pyc",
+            "pg_dump_errors/",
+            ".env",
+            "export_schema.log",
+            "venv/",
+            ".venv/",
+            "*.sqlite3",
+            "*.db"
+        ]
+        # If file exists, append only missing lines
+        if gitignore.exists():
+            existing = gitignore.read_text(encoding="utf-8", errors="replace").splitlines()
+            to_add = [l for l in default_ignore if l not in existing]
+            if to_add:
+                gitignore.write_text("\n".join(existing + to_add) + "\n", encoding="utf-8", errors="replace")
+        else:
+            gitignore.write_text("\n".join(default_ignore) + "\n", encoding="utf-8", errors="replace")
+        logger.info("Wrote .gitignore (%d entries)", len(default_ignore))
+
+        if commit:
+            # Stage everything (but not untracked large files if user wants to be selective)
+            subprocess.run(["git", "-C", str(outdir), "add", "."], check=True)
+            # Commit if there are staged changes
+            # Use plumbing to check if there is anything to commit
+            status_proc = subprocess.run(["git", "-C", str(outdir), "status", "--porcelain"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+            if status_proc.stdout.strip():
+                subprocess.run(["git", "-C", str(outdir), "commit", "-m", commit_message], check=True)
+                logger.info("Created initial commit in %s with message: %s", outdir, commit_message)
+            else:
+                logger.info("No changes to commit in %s", outdir)
+
+            # Ensure there's a 'main' branch
+            # If repo already has a branch named main, this is a no-op; otherwise create/set main to HEAD
+            try:
+                subprocess.run(["git", "-C", str(outdir), "rev-parse", "--verify", "main"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                # 'main' exists; do nothing
+            except subprocess.CalledProcessError:
+                # create main branch pointing at current HEAD
+                subprocess.run(["git", "-C", str(outdir), "branch", "-M", "main"], check=True)
+                logger.info("Set branch 'main'")
+
+        return True
+
+    except FileNotFoundError:
+        logger.warning("git not found on PATH; skipping git init/commit.")
+        return False
+    except subprocess.CalledProcessError as exception:
+        logger.exception("git command failed: %s", exception)
+        return False
     except Exception as exception:
-        logger.warning("git init failed: %s", exception)
+        # Narrow catch: log and return False
+        logger.exception("Unexpected error during git init: %s", exception)
+        return False
 
 
-# ---------- Orchestrator ----------
+# --- Orchestrator ---
 def export_schema(dsn: Dict[str, str],
                   outdir: Path,
                   requested_schemas: Optional[List[str]],
