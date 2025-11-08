@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import re
 import subprocess
 import sys
@@ -53,7 +54,7 @@ logger.addHandler(fh)
 
 # Try to import DB_CONFIG if present
 try:
-    from database_config import DB_CONFIG  # type: ignore
+    from database_config import DB_CONFIG
 except KeyboardInterrupt:
     logger.error("Interrupted by user.")
     sys.exit(1)
@@ -118,7 +119,7 @@ def dsn_to_pg_dump_connarg(dsn: Dict[str, str]) -> str:
         return f"--dbname={dbname}"
 
 
-# ---------- Catalog helpers ----------
+# --- Catalog helpers ---
 def discover_target_schemas(conn, requested_schemas: Optional[List[str]] = None) -> List[str]:
     """
     If requested_schemas provided, return that list.
@@ -130,7 +131,7 @@ def discover_target_schemas(conn, requested_schemas: Optional[List[str]] = None)
     SELECT nspname
     FROM pg_namespace
     WHERE nspname NOT IN ('pg_catalog', 'information_schema')
-      AND nspname NOT LIKE 'pg_toast%'
+      AND nspname NOT LIKE 'pg_t%' 
     ORDER BY nspname;
     """
     with conn.cursor() as cur:
@@ -154,7 +155,7 @@ def extension_schemas(conn) -> Dict[str, str]:
         return {row[0]: row[1] for row in cur.fetchall()}
 
 
-# ---------- Dumpers ----------
+# --- Dumpers ---
 def dump_extensions_stub(conn, outdir: Path):
     """
     Create small CREATE EXTENSION IF NOT EXISTS files for each installed extension.
@@ -396,12 +397,12 @@ def dump_triggers(conn: psycopg2.extensions.connection, outdir: Path, schemas: L
             (schemas,),
         )
         for oid, nsp, tablename, tgname, triggerddl in cur.fetchall():
-            fn = outdir / safe_filename(f"{nsp}.{tablename}.{tgname}__{oid}.sql")
+            fn = outdir / safe_filename(f"{nsp}.{tablename}.{tgname}.sql")
             fn.write_text(triggerddl.rstrip() + ";\n", encoding="utf-8", errors="replace")
             logger.info("Wrote trigger: %s", fn.relative_to(Path.cwd()))
 
 
-# ---------- Apply script / makefile / git ----------
+# --- Apply script / makefile / git ---
 APPLY_ORDER = ["types", "extensions", "sequences", "tables", "views", "functions", "triggers", "other"]
 
 
@@ -588,12 +589,18 @@ def export_schema(dsn: Dict[str, str],
         generate_apply_script(outdir)
         generate_makefile(outdir)
     if init_git_flag:
-        init_git(outdir)
+        init_git(
+            outdir,
+            user_name=AUTO_GIT_USER_NAME,
+            user_email=AUTO_GIT_USER_EMAIL,
+            commit=True,
+            commit_message=AUTO_GIT_COMMIT_MESSAGE,
+        )
 
     logger.info("Export completed into %s", outdir.resolve())
 
 
-# ---------- CLI ----------
+# --- CLI ---
 def parse_args(argv=None):
     p = argparse.ArgumentParser(description="Export Postgres schema objects into separate files.")
     p.add_argument("--host")
@@ -638,10 +645,18 @@ def main(argv=None):
     args = parse_args(argv)
     if args.verbose:
         logger.setLevel(logging.DEBUG)
+
     outdir = Path(args.outdir).absolute()
+    ensure_dir(outdir)
+
     schemas = None
     if args.schemas:
-        schemas = [s.strip() for s in args.schemas.split(",") if s.strip()]
+        schemas = [
+            s.strip()
+            for s in args.schemas.split(",")
+            if s.strip() and not s.startswith("pg_temp")
+        ]
+
     dsn = build_dsn_from_args(args)
     export_schema(
         dsn=dsn,
@@ -653,6 +668,35 @@ def main(argv=None):
         generate_makefile_flag=args.generate_makefile,
         init_git_flag=args.init_git,
     )
+
+    # ---------- AUTO GIT (for running in PyCharm / with no CLI args) ----------
+    # Criteria: no CLI args passed (typical when pressing F5), or PyCharm's env var present.
+    ran_with_no_cli = (len(sys.argv) == 1)
+    pycharm_env = bool(os.environ.get("PYCHARM_HOSTED") or os.environ.get("PYCHARM_HOST"))
+
+    if AUTO_INIT_GIT and (ran_with_no_cli or pycharm_env):
+        logger.info("Auto git init/commit enabled. Running init_git() with configured identity.")
+        # call init_git with the hard-coded identity and automatic commit
+        init_git(
+            outdir,
+            user_name=AUTO_GIT_USER_NAME,
+            user_email=AUTO_GIT_USER_EMAIL,
+            commit=True,
+            commit_message=AUTO_GIT_COMMIT_MESSAGE,
+        )
+    else:
+        # If user explicitly requested --init-git on the CLI handle that too
+        if args.init_git:
+            init_git(
+                outdir,
+                user_name=args.git_user_name if hasattr(args, "git_user_name") else None,
+                user_email=args.git_user_email if hasattr(args, "git_user_email") else None,
+                commit=(not getattr(args, "no_git_commit", False)),
+                commit_message=getattr(args, "git_commit_message", "Initial schema export"),
+            )
+
+    logger.info("Done.")
+
 
 
 if __name__ == "__main__":

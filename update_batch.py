@@ -22,19 +22,18 @@ logger.addHandler(fh)
 
 UPDATE_SQL = """
 WITH chunk AS (
-  SELECT metadata_pkid
-  FROM interface.metadata_interface
-  WHERE metadata_pkid > %s
-  ORDER BY metadata_pkid
+  SELECT titleinformation_pkid
+  FROM interface.titleinformation_interface
+  WHERE titleinformation_pkid > %s
+  ORDER BY titleinformation_pkid
   LIMIT %s
   FOR UPDATE SKIP LOCKED
 )
-UPDATE interface.metadata_interface i
-SET insert_dt = NOW(),
-    update_dt = NOW()
+UPDATE interface.titleinformation_interface i
+SET title = title 
 FROM chunk
-WHERE i.metadata_pkid = chunk.metadata_pkid
-RETURNING i.metadata_pkid;
+WHERE i.titleinformation_pkid = chunk.titleinformation_pkid
+RETURNING i.titleinformation_pkid;
 """
 
 def main():

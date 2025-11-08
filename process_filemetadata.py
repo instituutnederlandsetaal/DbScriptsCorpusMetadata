@@ -96,6 +96,5 @@ def main():
         conn.close()
         logger.info("=== Run finished ===")
 
-
 if __name__ == "__main__":
     main()
