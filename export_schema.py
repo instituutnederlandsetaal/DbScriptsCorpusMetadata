@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""
-pg_schema_export.py - exporter: one file per object, multi-schema, safe extension handling
-
-Usage examples:
-  ./export_schema.py --outdir schema_dump --generate-makefile --init-git
-  ./export_schema.py --schemas core,factory,metrics --outdir schema_dump
-
-Notes:
- - Requires Python 3.8+
- - Requires pg_dump on PATH and psycopg2 installed.
- - If you have database_config.DB_CONFIG it will be used automatically.
-"""
+# ---------- High-level description ----------
+# pg_schema_export.py: export Postgres schema objects into separate files suitable for version control.
+# - Uses a mix of catalog queries + pg_dump -t to produce one file per object.
+# - Designed to avoid dumping extension-owned objects -- we write extension stubs instead.
+# - Writes textual files as UTF-8 (errors replaced) to avoid encoding crashes.
+# - Optionally initialises a git repo and performs an initial commit.
+#
+# Requirements:
+#  - Python 3.8+
+#  - psycopg2 installed
+#  - pg_dump available on PATH (Postgres client)
+#  - Optional: database_config.DB_CONFIG module for connection parameters
 
 from __future__ import annotations
 
@@ -27,14 +27,25 @@ import psycopg2
 from psycopg2 import sql
 
 # --- Auto-commit settings ---
+# GIT_CONFIG expected to contain dictionary keys:
+#   AUTO_INIT_GIT (bool)            - whether to auto-init/commit when running with no CLI args
+#   AUTO_GIT_USER_NAME (str)        - name to set for local git commits (only used when init-ing)
+#   AUTO_GIT_USER_EMAIL (str)       - email to set for local git commits
+#   AUTO_GIT_COMMIT_MESSAGE (str)   - default commit message used when auto-committing
+#
+# These live in `git_config.py` so we can edit them without modifying the main script.
 from git_config import GIT_CONFIG
+
 AUTO_INIT_GIT = GIT_CONFIG["AUTO_INIT_GIT"]
 AUTO_GIT_USER_NAME = GIT_CONFIG["AUTO_GIT_USER_NAME"]
 AUTO_GIT_USER_EMAIL = GIT_CONFIG["AUTO_GIT_USER_EMAIL"]
 AUTO_GIT_COMMIT_MESSAGE = GIT_CONFIG["AUTO_GIT_COMMIT_MESSAGE"]
 
 # --- Logging ---
-LOG_FILENAME = "export_schema.log"  # change this filename if you want
+# Logs both to console and to a file (export_schema.log) using UTF-8.
+# Console handler writes to stdout so it's visible in PyCharm run console.
+# File handler appends so repeated runs are recorded.
+LOG_FILENAME = "export_schema.log"
 
 logger = logging.getLogger("pg_schema_export")
 logger.setLevel(logging.INFO)
@@ -65,8 +76,11 @@ except UnicodeError as e:
 except Exception as e:
     logger.error("Unexpected error: %s", e)
 
+
 # ---------- Utilities ----------
 def safe_filename(name: str) -> str:
+    # Convert an object identifier like "schema.table.name" into a filesystem-friendly filename.
+    # Keeps letters, numbers, dot, underscore, parentheses and dash; replaces other chars with '_'
     return re.sub(r"[^A-Za-z0-9_.()-]", "_", name)
 
 
@@ -75,10 +89,11 @@ def ensure_dir(path: Path):
 
 
 def run_pg_dump_and_write(pg_dump_conn_arg: str, args: List[str], out_path: Path, error_dir: Path) -> bool:
-    """
-    Run pg_dump -s with args and write stdout to out_path.
-    On failure write stderr into error_dir/<basename>.err and return False.
-    """
+    # Uses pg_dump -s (schema-only) to dump a single object.
+    #    - args: additional args like ['-t', 'schema.table']
+    #    - Writes stdout to the target file (binary write), so encoding is preserved.
+    #    - If pg_dump fails (non-zero exit), writes stderr to pg_dump_errors/<name>.err and returns False.
+    #    - Important: pg_dump output is authoritative for table DDL (indexes, comments, defaults).
     cmd = ["pg_dump", "-s"] + args + [pg_dump_conn_arg]
     logger.debug("pg_dump: %s", " ".join(cmd))
     try:
@@ -96,6 +111,8 @@ def run_pg_dump_and_write(pg_dump_conn_arg: str, args: List[str], out_path: Path
 
 
 def dsn_to_pg_dump_connarg(dsn: Dict[str, str]) -> str:
+    # Converts a psycopg2-style dsn dict into a pg_dump --dbname argument, using a connection URI if host present.
+    # Note: embedding passwords on the command line is not secure; prefer PGPASSWORD or .pgpass.
     dbname = dsn.get("dbname") or dsn.get("database")
     if not dbname:
         raise ValueError("dbname/database required")
@@ -121,10 +138,10 @@ def dsn_to_pg_dump_connarg(dsn: Dict[str, str]) -> str:
 
 # --- Catalog helpers ---
 def discover_target_schemas(conn, requested_schemas: Optional[List[str]] = None) -> List[str]:
-    """
-    If requested_schemas provided, return that list.
-    Otherwise return all non-system schemas (exclude pg_catalog, information_schema, pg_toast*).
-    """
+    # Returns list of schemas to export.
+    # If caller supplied a list (CLI --schemas) use that; otherwise list all non-system schemas.
+    # We exclude 'pg_catalog', 'information_schema' and schemas starting with 'pg_t' (mainly pg_toast and pg_temp).
+    # This avoids exporting temporary or system schemas.
     if requested_schemas:
         return requested_schemas
     q = """
@@ -141,10 +158,9 @@ def discover_target_schemas(conn, requested_schemas: Optional[List[str]] = None)
 
 
 def extension_schemas(conn) -> Dict[str, str]:
-    """
-    Return a mapping extname -> schema_name where the extension is installed.
-    Used to avoid dumping extension-owned objects as "user functions".
-    """
+    # Returns mapping extension_name -> schema_name (where extension is installed).
+    # We use this to avoid dumping extension-owned objects (e.g. pgcrypto functions) in user functions/.
+    # Instead we write a small CREATE EXTENSION IF NOT EXISTS stub under extensions/.
     q = """
     SELECT e.extname, n.nspname
     FROM pg_extension e
@@ -157,10 +173,11 @@ def extension_schemas(conn) -> Dict[str, str]:
 
 # --- Dumpers ---
 def dump_extensions_stub(conn, outdir: Path):
-    """
-    Create small CREATE EXTENSION IF NOT EXISTS files for each installed extension.
-    (Avoid using pg_dump --extension to prevent dumping entire schemas.)
-    """
+    # For each installed extension write a small stub file:
+    #   CREATE EXTENSION IF NOT EXISTS extname [WITH SCHEMA schemaname];
+    # We do NOT call `pg_dump --extension` since that sometimes inlines many other objects.
+    # These stubs record the presence of extensions without stuffing 55k lines into one file.
+    # NOTE: uses sql.Identifier(extname).as_string(conn) to correctly quote the extension identifier.
     ensure_dir(outdir)
     with conn.cursor() as cur:
         cur.execute(
@@ -197,9 +214,11 @@ def dump_tables_and_related(
         include_owner: bool,
         include_privs: bool
 ):
-    """
-    Use pg_dump -t per table for each schema/table
-    """
+    # Queries pg_tables for tablenames in target schemas and then runs:
+    #   pg_dump -s -t schema.table --no-owner --no-privileges
+    # per table. This produces a table-level file (indexes, constraints, ownership).
+    # Files are named schema.table.sql.
+    # We pass --no-owner / --no-privileges unless the user requests them via CLI flags.
     ensure_dir(outdir)
     with conn.cursor() as cur:
         cur.execute(
@@ -231,6 +250,8 @@ def dump_sequences(
         include_owner: bool,
         include_privs: bool
 ):
+    # Finds relkind = 'S' sequences and dumps each via pg_dump -t schema.sequence
+    # This captures owned sequences and standalone sequences individually.
     ensure_dir(outdir)
     with conn.cursor() as cur:
         cur.execute(
@@ -259,11 +280,11 @@ def dump_types_sql(
         outdir: Path,
         schemas: List[str]
 ):
-    """
-    Dump enum and composite types via SQL into individual files (UTF-8).
-    """
+    # Dumps enum and composite types using direct catalog queries.
+    # - Enums: builds CREATE TYPE ... AS ENUM ('a','b',...) and writes one file per enum.
+    # - Composite types: fetches attributes from pg_attribute and builds a CREATE TYPE ... AS (col type, ...).
+    # We avoid pg_dump -t for types because -t sometimes picks up relation-like names unexpectedly.
     ensure_dir(outdir)
-
     # 1) Enums
     with conn.cursor() as cur:
         cur.execute("""
@@ -324,6 +345,16 @@ def dump_functions(
         ext_schema_names: Set[str],
         pretty_names: bool
 ):
+    # Uses pg_get_functiondef(oid) to get the full CREATE FUNCTION text for each function/procedure.
+    # - Filters by schema(s) provided.
+    # - Skips functions whose schema is in ext_schema_names (extension-owned).
+    # - If pretty_names option is used the filename includes a sanitized argument signature; otherwise uses schema.proname.
+    # - Writes DDL as UTF-8.
+    #
+    # Notes:
+    # - We intentionally do not include OIDs in filenames to keep them human-friendly.
+    # - If you have overloaded functions with the same name and identical signatures across schemas,
+    #   the filename might collide; you can enable the short-hash fallback if desired.
     ensure_dir(outdir)
     with conn.cursor() as cur:
         # select functions/procedures in target schemas
@@ -361,6 +392,8 @@ def dump_views(
         outdir: Path,
         schemas: List[str]
 ):
+    # Uses pg_get_viewdef to write CREATE OR REPLACE VIEW schema.view AS ... ; into files.
+    # We add the CREATE OR REPLACE header to ensure idempotence.
     ensure_dir(outdir)
     with conn.cursor() as cur:
         cur.execute(
@@ -383,6 +416,9 @@ def dump_views(
 
 
 def dump_triggers(conn: psycopg2.extensions.connection, outdir: Path, schemas: List[str]):
+    # Uses pg_get_triggerdef(oid, true) to obtain trigger DDL (which includes CREATE TRIGGER ...).
+    # Filename constructed as schema.table.triggername.sql (OID omitted).
+    # If filename collisions are a worry, add a short hash of triggerddl (see optional snippet).
     ensure_dir(outdir)
     with conn.cursor() as cur:
         cur.execute(
@@ -407,6 +443,8 @@ APPLY_ORDER = ["types", "extensions", "sequences", "tables", "views", "functions
 
 
 def generate_apply_script(outdir: Path):
+    # writes 00_apply.sh which iterates directories in APPLY_ORDER and psql -f each SQL file.
+    # Useful to reapply the exported schema in a sensible order.
     script = outdir / "00_apply.sh"
     lines = [
         "#!/usr/bin/env bash",
@@ -436,6 +474,7 @@ def generate_apply_script(outdir: Path):
 
 
 def generate_makefile(outdir: Path):
+    # writes a tiny Makefile that calls 00_apply.sh when `make apply` run.
     mf = outdir / "Makefile"
     content = (
         ".PHONY: all apply\n\n"
@@ -454,12 +493,15 @@ def init_git(
         commit: bool = True,
         commit_message: str = "Initial schema export"
 ):
-    """
-    Initialise a git repository in outdir (if not already a repo), optionally set user.name/user.email,
-    write a sensible .gitignore, run git add and git commit.
-
-    Returns True if repository was created/committed successfully, False otherwise.
-    """
+    # Initialises a git repo in outdir (if missing), writes/updates .gitignore, optionally stages and commits.
+    # - Uses local git config user.name / user.email if provided.
+    # - Uses `git -C <outdir>` so commands run in the repo root.
+    # - Returns True on success, False on failure.
+    #
+    # Caveats:
+    # - Ensure git is on PATH.
+    # - If the folder is already a bare repo you may see errors; the function expects a normal work tree.
+    # - Avoid committing secrets — .gitignore contains .env by default.
     try:
         # If already a git repo, skip init
         if (outdir / ".git").exists():
@@ -504,7 +546,8 @@ def init_git(
             subprocess.run(["git", "-C", str(outdir), "add", "."], check=True)
             # Commit if there are staged changes
             # Use plumbing to check if there is anything to commit
-            status_proc = subprocess.run(["git", "-C", str(outdir), "status", "--porcelain"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+            status_proc = subprocess.run(["git", "-C", str(outdir), "status", "--porcelain"], stdout=subprocess.PIPE,
+                                         stderr=subprocess.PIPE, check=True)
             if status_proc.stdout.strip():
                 subprocess.run(["git", "-C", str(outdir), "commit", "-m", commit_message], check=True)
                 logger.info("Created initial commit in %s with message: %s", outdir, commit_message)
@@ -514,7 +557,8 @@ def init_git(
             # Ensure there's a 'main' branch
             # If repo already has a branch named main, this is a no-op; otherwise create/set main to HEAD
             try:
-                subprocess.run(["git", "-C", str(outdir), "rev-parse", "--verify", "main"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                subprocess.run(["git", "-C", str(outdir), "rev-parse", "--verify", "main"], check=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 # 'main' exists; do nothing
             except subprocess.CalledProcessError:
                 # create main branch pointing at current HEAD
@@ -544,6 +588,16 @@ def export_schema(dsn: Dict[str, str],
                   pretty_func_names: bool,
                   generate_makefile_flag: bool,
                   init_git_flag: bool):
+    # Orchestrates the whole export:
+    # - Connects to DB using psycopg2 (data source name produced from DB_CONFIG or CLI).
+    # - Discovers target schemas.
+    # - Writes extension stubs, then tables, sequences, types, views, functions, triggers.
+    # - Closes connection and optionally generates apply script/makefile and runs init_git.
+    #
+    # Notes:
+    # - We call pg_dump per-table/sequence/type for precise DDL.
+    # - We skip extension-owned functions (to avoid duplication).
+    # - pg_dump stderr is saved under pg_dump_errors/ so the output dirs stay clean.
     ensure_dir(outdir)
     error_dir = outdir / "pg_dump_errors"
     pg_dump_conn_arg = dsn_to_pg_dump_connarg(dsn)
@@ -564,11 +618,22 @@ def export_schema(dsn: Dict[str, str],
         dump_extensions_stub(conn, outdir / "extensions")
 
         # Tables
-        dump_tables_and_related(pg_dump_conn_arg, conn, schemas, outdir / "tables", error_dir, include_owner,
+        dump_tables_and_related(pg_dump_conn_arg,
+                                conn,
+                                schemas,
+                                outdir / "tables",
+                                error_dir,
+                                include_owner,
                                 include_privs)
 
         # Sequences
-        dump_sequences(pg_dump_conn_arg, conn, schemas, outdir / "sequences", error_dir, include_owner, include_privs)
+        dump_sequences(pg_dump_conn_arg,
+                       conn,
+                       schemas,
+                       outdir / "sequences",
+                       error_dir,
+                       include_owner,
+                       include_privs)
 
         # Types
         dump_types_sql(conn, outdir / "types", schemas)
@@ -602,6 +667,7 @@ def export_schema(dsn: Dict[str, str],
 
 # --- CLI ---
 def parse_args(argv=None):
+    # defines CLI flags (see separate section below).
     p = argparse.ArgumentParser(description="Export Postgres schema objects into separate files.")
     p.add_argument("--host")
     p.add_argument("--port")
@@ -621,6 +687,7 @@ def parse_args(argv=None):
 
 
 def build_dsn_from_args(args) -> Dict[str, str]:
+    # builds a psycopg2-friendly dict from DB_CONFIG or CLI args.
     if DB_CONFIG:
         dsn = dict(DB_CONFIG)
         # override if CLI provided
@@ -642,6 +709,12 @@ def build_dsn_from_args(args) -> Dict[str, str]:
 
 
 def main(argv=None):
+    # main function:
+    #  - Parses args, builds outdir, parses --schemas, builds dsn
+    #  - Calls export_schema(...)
+    #  - If AUTO_INIT_GIT and run with no CLI args (typical PyCharm F5), runs init_git with configured identity.
+    #
+    # Note: run with --verbose to enable DEBUG logging, which prints pg_dump calls and additional info.
     args = parse_args(argv)
     if args.verbose:
         logger.setLevel(logging.DEBUG)
@@ -696,7 +769,6 @@ def main(argv=None):
             )
 
     logger.info("Done.")
-
 
 
 if __name__ == "__main__":
