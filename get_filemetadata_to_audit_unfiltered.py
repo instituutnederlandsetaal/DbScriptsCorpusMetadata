@@ -1,6 +1,8 @@
 import logging
 import sys
+
 import psycopg2
+
 from database_config import DB_CONFIG
 
 BATCH_SIZE = 1000  # rows per chunk
@@ -23,6 +25,7 @@ logger.addHandler(ch)
 fh = logging.FileHandler(LOG_FILENAME)
 fh.setFormatter(fmt)
 logger.addHandler(fh)
+
 
 def main():
     # Connect to the target database
@@ -68,6 +71,7 @@ def main():
     finally:
         conn.close()
         logger.info("Connection closed.")
+
 
 if __name__ == "__main__":
     main()

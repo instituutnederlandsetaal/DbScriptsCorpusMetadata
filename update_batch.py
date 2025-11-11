@@ -1,7 +1,9 @@
 import logging
 import sys
 import time
+
 import psycopg2
+
 from database_config import DB_CONFIG
 
 BATCH_SIZE = 1000
@@ -35,6 +37,7 @@ FROM chunk
 WHERE i.titleinformation_pkid = chunk.titleinformation_pkid
 RETURNING i.titleinformation_pkid;
 """
+
 
 def main():
     conn = psycopg2.connect(**DB_CONFIG)
@@ -70,6 +73,7 @@ def main():
     finally:
         conn.close()
         logger.info("Connection closed.")
+
 
 if __name__ == "__main__":
     main()

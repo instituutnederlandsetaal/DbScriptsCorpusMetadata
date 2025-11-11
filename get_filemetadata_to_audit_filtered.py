@@ -1,8 +1,10 @@
 import logging
 import sys
 import time
+
 import psycopg2
 from psycopg2 import errors
+
 from database_config import DB_CONFIG
 
 BATCH_SIZE = 100  # rows per chunk
