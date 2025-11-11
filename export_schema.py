@@ -653,14 +653,6 @@ def export_schema(dsn: Dict[str, str],
     if generate_makefile_flag:
         generate_apply_script(outdir)
         generate_makefile(outdir)
-    if init_git_flag:
-        init_git(
-            outdir,
-            user_name=AUTO_GIT_USER_NAME,
-            user_email=AUTO_GIT_USER_EMAIL,
-            commit=True,
-            commit_message=AUTO_GIT_COMMIT_MESSAGE,
-        )
 
     logger.info("Export completed into %s", outdir.resolve())
 
@@ -683,6 +675,7 @@ def parse_args(argv=None):
     p.add_argument("--generate-makefile", action="store_true")
     p.add_argument("--init-git", action="store_true")
     p.add_argument("--verbose", action="store_true")
+    p.add_argument("--git-commit-message", help="Custom git commit message when using --init-git")
     return p.parse_args(argv)
 
 
@@ -760,16 +753,18 @@ def main(argv=None):
     else:
         # If user explicitly requested --init-git on the CLI handle that too
         if args.init_git:
+            commit_msg = args.git_commit_message or AUTO_GIT_COMMIT_MESSAGE or "Initial schema export"
             init_git(
                 outdir,
-                user_name=args.git_user_name if hasattr(args, "git_user_name") else None,
-                user_email=args.git_user_email if hasattr(args, "git_user_email") else None,
-                commit=(not getattr(args, "no_git_commit", False)),
-                commit_message=getattr(args, "git_commit_message", "Initial schema export"),
+                user_name=AUTO_GIT_USER_NAME,
+                user_email=AUTO_GIT_USER_EMAIL,
+                commit=True,
+                commit_message=commit_msg,
             )
-
     logger.info("Done.")
 
 
 if __name__ == "__main__":
     main()
+
+# python export_schema.py --outdir pg_schema_export --init-git --git-commit-message "Test custom git commit message from command line"
